@@ -2,39 +2,36 @@ using System.Collections.Generic;
 
 namespace nl.ChessOnline
 {
-    public struct Piece
+    public class Piece
     {
         public List<Movement> AvailableMovements { get; private set; }
 
-        public TeamType team;
+        public Color color;
         public PieceType pieceType;
-        public Cell position;
         public int movedCount;
+        public bool isCatched;
 
         public Piece()
         {
-            team = TeamType.None;
+            color = Color.None;
             pieceType = PieceType.None;
-            position.x = 0;
-            position.y = 0;
             movedCount = 0;
             AvailableMovements = new List<Movement>(28);
         }
 
-        public void Initialize(TeamType _team, PieceType _pieceType, int _initPositionX, int _initPositionY)
+        public void Initialize(Color _color, PieceType _pieceType)
         {
-            team = _team;
+            color = _color;
             pieceType = _pieceType;
-            position.x = _initPositionX;
-            position.y = _initPositionY;
             movedCount = 0;
+            isCatched = false;
             AvailableMovements.Clear();
         }
 
         public void RecognizeEnvironment(ChessManager _manager)
         {
             AvailableMovements.Clear();
-
+/*
             switch(pieceType)
             {
                 case PieceType.Pawn:
@@ -77,26 +74,27 @@ namespace nl.ChessOnline
                 default:
                     break;
             }
+*/
         }
 
         public void Move(ChessManager _manager, int _idxMovement)
         {
 
         }
-
+/*
         private void m_RecognizeAsPawn(ChessManager _manager)
         {
-            int axis = this.team == TeamType.White ? 1 : -1;
+            int axis = this.color == Color.White ? 1 : -1;
             MovementType promotableType = ((position.y + axis) % 7 == 0) ? MovementType.Promotion : MovementType.Normal;
 
             if(_manager.IsEmptyCell(position.x, position.y + axis))
-                AvailableMovements.Add(new Movement(position.x, position.y + 1 * axis, promotableType | MovementType.Normal));
+                AvailableMovements.Add(new Movement(idxPiece, position.x, position.y + 1 * axis, promotableType | MovementType.Normal));
             if (movedCount == 0 && _manager.IsEmptyCell(position.x, position.y + 2 * axis))
-                AvailableMovements.Add(new Movement(position.x, position.y + 2 * axis, MovementType.Normal));
+                AvailableMovements.Add(new Movement(idxPiece, position.x, position.y + 2 * axis, MovementType.Normal));
             if(_manager.IsEnemyPiece(position.x, position.y, position.x - axis, position.y + axis))
-                AvailableMovements.Add(new Movement(position.x - axis, position.y + axis, promotableType | MovementType.Catch));
+                AvailableMovements.Add(new Movement(idxPiece, position.x - axis, position.y + axis, promotableType | MovementType.Catch));
             if(_manager.IsEnemyPiece(position.x, position.y, position.x + axis, position.y + axis))
-                AvailableMovements.Add(new Movement(position.x + axis, position.y + axis, promotableType | MovementType.Catch));
+                AvailableMovements.Add(new Movement(idxPiece, position.x + axis, position.y + axis, promotableType | MovementType.Catch));
 
             // TODO: 이 곳에 앙파상 규칙을 작성합니다.
             // if (_manager.IsEnemyPiece(position.x, position.y, position.x + axis, position.y))
@@ -108,9 +106,9 @@ namespace nl.ChessOnline
             _dy += position.y;
 
             if(_manager.IsEmptyCell(_dx, _dy))
-                AvailableMovements.Add(new Movement(_dx, _dy, MovementType.Normal));
+                AvailableMovements.Add(new Movement(idxPiece, _dx, _dy, MovementType.Normal));
             else if(_manager.IsEnemyPiece(position.x, position.y, _dx, _dy))
-                AvailableMovements.Add(new Movement(_dx, _dy, MovementType.Catch));
+                AvailableMovements.Add(new Movement(idxPiece, _dx, _dy, MovementType.Catch));
             else
                 return;
         }
@@ -123,9 +121,9 @@ namespace nl.ChessOnline
                 int y = position.y + _dy * (i + 1);
 
                 if(_manager.IsEmptyCell(x, y))
-                    AvailableMovements.Add(new Movement(x, y, MovementType.Normal));
+                    AvailableMovements.Add(new Movement(idxPiece, x, y, MovementType.Normal));
                 else if(_manager.IsEnemyPiece(position.x, position.y, x, y))
-                    AvailableMovements.Add(new Movement(x, y, MovementType.Catch));
+                    AvailableMovements.Add(new Movement(idxPiece, x, y, MovementType.Catch));
                 else
                     break;
             }
@@ -145,5 +143,6 @@ namespace nl.ChessOnline
         {
 
         }
+*/
     }
 }

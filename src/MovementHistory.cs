@@ -2,7 +2,7 @@ namespace nl.ChessOnline
 {
     public class MovementHistory
     {
-        public TeamType teamColor;
+        public Color teamColor;
         public PieceType pieceType;
         public MovementType movementType;
 

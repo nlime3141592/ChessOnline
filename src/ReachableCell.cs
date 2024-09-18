@@ -6,7 +6,7 @@ namespace nl.ChessOnline
         public int col;
         public MovementType movementType;
 
-        public ReachableCell(int _row, int _col, MovementType _movementType = MovementType.None)
+        public ReachableCell(int _row, int _col, MovementType _movementType = MovementType.Normal)
         {
             this.row = _row;
             this.col = _col;

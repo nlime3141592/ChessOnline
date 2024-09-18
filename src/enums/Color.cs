@@ -1,6 +1,6 @@
 namespace nl.ChessOnline
 {
-    public enum TeamType
+    public enum Color
     {
         None,
         White,
