@@ -28,6 +28,7 @@ namespace nl.ChessOnline
         public Piece inputPawnSpecialStarted = null;
 #endregion
 
+#region Initialization
         public ChessManager()
         {
             gameBoard = new Piece[c_BOARD_SIZE_X, c_BOARD_SIZE_Y];
@@ -111,6 +112,7 @@ namespace nl.ChessOnline
             pieces[30].Initialize(tB, pN);
             pieces[31].Initialize(tB, pR);
         }
+#endregion
 
 #region Input Signal
         public void SignalSelect(int _posX, int _posY)
@@ -149,25 +151,13 @@ namespace nl.ChessOnline
 #endregion
 
 #region Draw Check Map
-        public void ClearCheckMap()
+        private void ClearCheckMap()
         {
             for(int i = 0; i < c_BOARD_SIZE_X; ++i)
             for(int j = 0; j < c_BOARD_SIZE_Y; ++j)
             {
                 checkMap[i, j] = false;
             }
-        }
-
-        public void DrawCheckMapWhite()
-        {
-            this.ClearCheckMap();
-            this.m_DrawCheckMap(Color.White);
-        }
-
-        public void DrawCheckMapBlack()
-        {
-            this.ClearCheckMap();
-            this.m_DrawCheckMap(Color.Black);
         }
 
         private void m_DrawCheckMap(Color _color)
@@ -518,6 +508,26 @@ namespace nl.ChessOnline
             Debug.Assert(!IsEmptyCell(_posX, _posY), string.Format("({0}, {1})에 기물이 존재하지 않음", _posX, _posY));
 
             return gameBoard[_posX, _posY].pieceType == _pieceType;
+        }
+
+        public bool IsChecked(Color _attacker, Color _defencer)
+        {
+            ClearCheckMap();
+            this.m_DrawCheckMap(_attacker);
+
+            for(int y = 0; y < c_BOARD_SIZE_Y; ++y)
+            for(int x = 0; x < c_BOARD_SIZE_X; ++x)
+            {
+                if (gameBoard[x, y] != null &&
+                    gameBoard[x, y].color == _defencer &&
+                    IsKingCell(x, y)
+                )
+                {
+                    return checkMap[x, y];
+                }
+            }
+
+            return false;
         }
 #endregion
 /*
