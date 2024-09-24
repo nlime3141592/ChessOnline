@@ -1,45 +1,47 @@
 ﻿using System;
-
+using System.Collections.Generic;
 using nl.ChessOnline3;
 
-namespace nl.ChessOnline
+namespace nl.ChessOnline3
 {
     internal class Program
     {
         private static void Main(string[] args)
         {
-            Console.WriteLine("hello world");
-
-            nl.ChessOnline3.Piece p = null;
-
             ChessManager manager = new ChessManager();
+            GameState gameState = GameState.Ready;
+
             manager.Initialize();
 
-            // manager.gameBoard = new Piece[8, 8];
-            Piece whiteQ = manager.pieces[3];
-            Piece blackK = manager.pieces[28];
-            // manager.gameBoard[4, 4] = whiteQ;
-            // manager.gameBoard[3, 5] = blackK;
+            // TODO: Draw
+            manager.Draw();
 
-            bool isChecked = manager.IsChecked(Color.White, Color.Black);
-
-            for(int y = 7; y >= 0; --y)
+            while((gameState = manager.UpdateGameState()) == GameState.Running)
             {
-                for(int x = 0; x < 8; ++x)
-                {
-                    if(manager.gameBoard[x, y] == blackK)
-                        Console.Write("K");
-                    else
-                        Console.Write("{0}", manager.checkMap[x, y] ? "O" : "*");
-                }
+                Console.WriteLine("현재 게임 상태 == {0}", gameState.ToString());
 
-                Console.WriteLine();
+                // TODO: Input
+                Console.Write("위치 입력 x=[0, 7] y=[0, 7]: ");
+                string[] position = Console.ReadLine().Split();
+                int px = int.Parse(position[0]);
+                int py = int.Parse(position[1]);
+                CellData cellData = manager.chessBoard[px, py];
+                List<PieceActionList> nextActions = cellData.shownPiece.nextActions;
+                for(int i = 0; i < nextActions.Count; ++i)
+                {
+                    Console.WriteLine(nextActions[i].ToString());
+                }
+                Console.WriteLine("이동할 인덱스 입력 i=[0, _]:");
+                int index = int.Parse(Console.ReadLine());
+
+                // TODO: Logic
+                manager.Move(px, py, index);
+
+                // TODO: Draw
+                manager.Draw();
             }
 
-            if(isChecked)
-                Console.WriteLine("Checked");
-            else
-                Console.WriteLine("Not Checked");
+            Console.WriteLine("최종 게임 상태 == {0}", gameState.ToString());
         }
     }
 }

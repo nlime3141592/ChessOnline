@@ -31,5 +31,10 @@ namespace nl.ChessOnline3
                 base[i].Undo();
             }
         }
+
+        public override string ToString()
+        {
+            return string.Format("rep position == ({0}, {1})", reperesentPosition.x, reperesentPosition.y);
+        }
     }
 }
