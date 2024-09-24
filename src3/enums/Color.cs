@@ -2,7 +2,7 @@ namespace nl.ChessOnline3
 {
     public enum Color
     {
-        White,
-        Black
+        White = 0,
+        Black = 1
     }
 }

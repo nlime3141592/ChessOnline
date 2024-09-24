@@ -1,5 +1,7 @@
 ﻿using System;
 
+using nl.ChessOnline3;
+
 namespace nl.ChessOnline
 {
     internal class Program
@@ -7,6 +9,8 @@ namespace nl.ChessOnline
         private static void Main(string[] args)
         {
             Console.WriteLine("hello world");
+
+            nl.ChessOnline3.Piece p = null;
 
             ChessManager manager = new ChessManager();
             manager.Initialize();

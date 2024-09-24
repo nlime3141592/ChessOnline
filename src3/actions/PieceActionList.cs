@@ -4,11 +4,13 @@ namespace nl.ChessOnline3
 {
     public class PieceActionList : List<PieceAction>
     {
+        public IntVector2 reperesentPosition;
         public bool isTestAction;
 
-        public PieceActionList(int _capacity, bool _isTestAction)
+        public PieceActionList(IntVector2 _representPosition, int _capacity, bool _isTestAction)
         : base(_capacity)
         {
+            reperesentPosition = _representPosition;
             isTestAction = _isTestAction;
         }
 
