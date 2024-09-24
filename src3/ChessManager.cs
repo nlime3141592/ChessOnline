@@ -164,28 +164,125 @@ namespace nl.ChessOnline3
         }
 
 #region Action Handling
-        private void m_HandleAgentAction(CellData _cellData)
+        private void m_GenerateAgentAction(CellData _cellData)
         {
-
+            switch(_cellData.hiddenPiece.pieceType)
+            {
+                case PieceType.Pawn:
+                    m_GeneratePawnAction(_cellData);
+                    break;
+                case PieceType.Bishop:
+                    m_GenerateBishopAction(_cellData);
+                    break;
+                case PieceType.Knight:
+                    m_GenerateKnightAction(_cellData);
+                    break;
+                case PieceType.Rook:
+                    m_GenerateRookAction(_cellData);
+                    break;
+                case PieceType.Queen:
+                    m_GenerateQueenAction(_cellData);
+                    break;
+                case PieceType.King:
+                    m_GenerateKingAction(_cellData);
+                    break;
+                default:
+                    break;
+            }
         }
 
-        private void m_HandlePawnAction(CellData _cellData)
+        private void m_GeneratePawnAction(CellData _cellData)
         {
             Piece piece = _cellData.hiddenPiece;
 
             int axis = piece.color == Color.White ? 1 : -1;
             IntVector2 position = _cellData.position;
 
-            PieceActionList front1 = new PieceActionList(new IntVector2(position.x, position.y + axis), 1, true);
+            IntVector2 frontPosition1 = new IntVector2(position.x, position.y + axis);
+            IntVector2 frontPosition2 = new IntVector2(position.x, frontPosition1.y + axis);
+            IntVector2 sideFrontPosition1 = new IntVector2(position.x - axis, frontPosition1.y);
+            IntVector2 sideFrontPosition2 = new IntVector2(position.x + axis, frontPosition1.y);
+            IntVector2 sidePosition1 = new IntVector2(sideFrontPosition1.x, position.y);
+            IntVector2 sidePosition2 = new IntVector2(sideFrontPosition2.x, position.y);
 
-            if(piece.movedCount == 0)
+            if (this.IsEmptyCell(frontPosition1))
             {
-                PieceActionList front2 = new PieceActionList(new IntVector2(position.x, position.y + 2 * axis), 1, true);
+                PieceActionList front1 = new PieceActionList(frontPosition1, 1, true);
+                front1.Add(new PieceMoveAction(this, position, frontPosition1));
+                piece.nextActions.Add(front1);
+
+                if (piece.movedCount == 0 && this.IsEmptyCell(frontPosition2))
+                {
+                    PieceActionList front2 = new PieceActionList(frontPosition2, 1, true);
+                    front2.Add(new PieceMoveAction(this, position, frontPosition2));
+                    piece.nextActions.Add(front2);
+                }
             }
+
+            if (this.IsEnemyPiece(position, sideFrontPosition1))
+            {
+                PieceActionList sideFront1 = new PieceActionList(sideFrontPosition1, 1, true);
+                sideFront1.Add(new PieceMoveAction(this, position, sideFrontPosition1));
+                piece.nextActions.Add(sideFront1);
+            }
+
+            if (this.IsEnemyPiece(position, sideFrontPosition2))
+            {
+                PieceActionList sideFront2 = new PieceActionList(sideFrontPosition2, 1, true);
+                sideFront2.Add(new PieceMoveAction(this, position, sideFrontPosition2));
+                piece.nextActions.Add(sideFront2);
+            }
+
+            if (this.IsEnemyPiece(position, sidePosition1) &&
+                piece == this.latestSpecialStartedPawn &&
+                this.ComparePieceType(position, PieceType.Pawn)
+            )
+            {
+                PieceActionList side1 = new PieceActionList(sidePosition1, 2, true);
+                side1.Add(new PieceCatchAction(this, sidePosition1));
+                side1.Add(new PieceMoveAction(this, position, sideFrontPosition1));
+                piece.nextActions.Add(side1);
+            }
+
+            if (this.IsEnemyPiece(position, sidePosition2) &&
+                piece == this.latestSpecialStartedPawn &&
+                this.ComparePieceType(position, PieceType.Pawn)
+            )
+            {
+                PieceActionList side2 = new PieceActionList(sidePosition2, 2, true);
+                side2.Add(new PieceCatchAction(this, sidePosition2));
+                side2.Add(new PieceMoveAction(this, position, sideFrontPosition1));
+                piece.nextActions.Add(side2);
+            }
+        }
+
+        private void m_GenerateBishopAction(CellData _cellData)
+        {
+
+        }
+
+        private void m_GenerateKnightAction(CellData _cellData)
+        {
+
+        }
+
+        private void m_GenerateRookAction(CellData _cellData)
+        {
+
+        }
+
+        private void m_GenerateQueenAction(CellData _cellData)
+        {
+
+        }
+
+        private void m_GenerateKingAction(CellData _cellData)
+        {
+
         }
 #endregion
 
-        public bool IsChecked(Color _defencerTeamColor)
+        private bool IsChecked(Color _defencerTeamColor)
         {
             for(int y = 0; y < 8; ++y)
             for(int x = 0; x < 8; ++x)
@@ -240,6 +337,7 @@ namespace nl.ChessOnline3
             }
         }
 
+#region Conditions
         public bool IsValidPosition(IntVector2 _position)
         {
             return this.IsValidPosition(_position.x, _position.y);
@@ -279,5 +377,16 @@ namespace nl.ChessOnline3
         {
             return chessBoard[_positionX, _positionY].hiddenPiece == null;
         }
+
+        public bool ComparePieceType(IntVector2 _position, PieceType _pieceType)
+        {
+            return this.ComparePieceType(_position.x, _position.y, _pieceType);
+        }
+
+        public bool ComparePieceType(int _positionX, int _positionY, PieceType _pieceType)
+        {
+            return chessBoard[_positionX, _positionY].hiddenPiece.pieceType == _pieceType;
+        }
+#endregion
     }
 }
