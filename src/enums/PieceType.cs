@@ -1,11 +1,10 @@
-namespace nl.ChessOnline
+namespace nl.ChessOnline3
 {
     public enum PieceType
     {
-        None,
         Pawn,
-        Knight,
         Bishop,
+        Knight,
         Rook,
         Queen,
         King

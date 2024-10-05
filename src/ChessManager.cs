@@ -1,589 +1,611 @@
 using System;
-using System.Collections;
+using System.Collections.Generic;
 using System.Diagnostics;
 
-namespace nl.ChessOnline
+namespace nl.ChessOnline3
 {
     public class ChessManager
     {
-        private const int c_BOARD_SIZE_X = 8;
-        private const int c_BOARD_SIZE_Y = 8;
-        private const int c_PIECE_COUNT = 32;
+        public CellData[,] chessBoard;
+        public int currentTurnNumber;
 
-        public Piece[,] gameBoard;
         public Piece[] pieces;
-        public bool[,] checkMap;
-        public int turnNumber;
-        public bool isGameStarted;
 
-#region Input Register
-        public int inputSelectedPositionX = -1;
-        public int inputSelectedPositionY = -1;
+        public List<PieceActionList> actionHistory;
 
-        public int inputMovingPositionX = -1;
-        public int inputMovingPositionY = -1;
+        public Piece latestSpecialStartedPawn;
 
-        public PieceType inputPromoted = PieceType.None;
-
-        public Piece inputPawnSpecialStarted = null;
-#endregion
-
-#region Initialization
         public ChessManager()
         {
-            gameBoard = new Piece[c_BOARD_SIZE_X, c_BOARD_SIZE_Y];
-            pieces = new Piece[c_PIECE_COUNT];
-            checkMap = new bool[c_BOARD_SIZE_X, c_BOARD_SIZE_Y];
+            chessBoard = new CellData[8, 8];
+            currentTurnNumber = 0;
 
-            for(int i = 0; i < c_PIECE_COUNT; ++i)
+            pieces = new Piece[32];
+
+            for(int y = 0; y < 8; ++y)
+            for(int x = 0; x < 8; ++x)
+            {
+                chessBoard[x, y].checkablePieces = new List<Piece>(16);
+            }
+
+            for(int i = 0; i < 32; ++i)
                 pieces[i] = new Piece();
 
-            this.Initialize();
+            actionHistory = new List<PieceActionList>(256);
         }
 
         public void Initialize()
         {
-            Color tW = Color.White;
-            Color tB = Color.Black;
+            for(int i = 0; i < 16; ++i)
+            {
+                pieces[i].color = Color.White;
+                pieces[i + 16].color = Color.Black;
+            }
 
-            PieceType pP = PieceType.Pawn;
-            PieceType pB = PieceType.Bishop;
-            PieceType pN = PieceType.Knight;
-            PieceType pR = PieceType.Rook;
-            PieceType pQ = PieceType.Queen;
-            PieceType pK = PieceType.King;
+            for(int i = 0; i < 2; ++i)
+            {
+                pieces[16 * i + 0].pieceType = PieceType.King;
+                pieces[16 * i + 1].pieceType = PieceType.Pawn;
+                pieces[16 * i + 2].pieceType = PieceType.Pawn;
+                pieces[16 * i + 3].pieceType = PieceType.Pawn;
+                pieces[16 * i + 4].pieceType = PieceType.Pawn;
+                pieces[16 * i + 5].pieceType = PieceType.Pawn;
+                pieces[16 * i + 6].pieceType = PieceType.Pawn;
+                pieces[16 * i + 7].pieceType = PieceType.Pawn;
+                pieces[16 * i + 8].pieceType = PieceType.Pawn;
+                pieces[16 * i + 9].pieceType = PieceType.Bishop;
+                pieces[16 * i + 10].pieceType = PieceType.Bishop;
+                pieces[16 * i + 11].pieceType = PieceType.Knight;
+                pieces[16 * i + 12].pieceType = PieceType.Knight;
+                pieces[16 * i + 13].pieceType = PieceType.Rook;
+                pieces[16 * i + 14].pieceType = PieceType.Rook;
+                pieces[16 * i + 15].pieceType = PieceType.Queen;
+            }
 
-            turnNumber = 0;
-            isGameStarted = false;
+            for(int y = 0; y < 8; ++y)
+            for(int x = 0; x < 8; ++x)
+            {
+                chessBoard[x, y].hiddenPiece = null;
 
-            inputSelectedPositionX = -1;
-            inputSelectedPositionY = -1;
+                chessBoard[x, y].position.x = x;
+                chessBoard[x, y].position.y = y;
 
-            inputMovingPositionX = -1;
-            inputMovingPositionY = -1;
-
-            inputPromoted = PieceType.None;
+                chessBoard[x, y].checkablePieces.Clear();
+            }
 
             for(int i = 0; i < 8; ++i)
             {
-                gameBoard[i, 0] = pieces[i];
-                gameBoard[i, 1] = pieces[i + 8];
-                gameBoard[i, 2] = null;
-                gameBoard[i, 3] = null;
-                gameBoard[i, 4] = null;
-                gameBoard[i, 5] = null;
-                gameBoard[i, 6] = pieces[i + 16];
-                gameBoard[i, 7] = pieces[i + 24];
+                chessBoard[i, 1].hiddenPiece = pieces[i + 1];
+                chessBoard[i, 6].hiddenPiece = pieces[i + 17];
             }
 
-            // NOTE: White Team Pieces, 0 to 15.
-            pieces[0].Initialize(tW, pR);
-            pieces[1].Initialize(tW, pN);
-            pieces[2].Initialize(tW, pB);
-            pieces[3].Initialize(tW, pQ);
-            pieces[4].Initialize(tW, pK);
-            pieces[5].Initialize(tW, pB);
-            pieces[6].Initialize(tW, pN);
-            pieces[7].Initialize(tW, pR);
-            pieces[8].Initialize(tW, pP);
-            pieces[9].Initialize(tW, pP);
-            pieces[10].Initialize(tW, pP);
-            pieces[11].Initialize(tW, pP);
-            pieces[12].Initialize(tW, pP);
-            pieces[13].Initialize(tW, pP);
-            pieces[14].Initialize(tW, pP);
-            pieces[15].Initialize(tW, pP);
+            chessBoard[0, 0].hiddenPiece = pieces[13];
+            chessBoard[1, 0].hiddenPiece = pieces[12];
+            chessBoard[2, 0].hiddenPiece = pieces[9];
+            chessBoard[3, 0].hiddenPiece = pieces[15];
+            chessBoard[4, 0].hiddenPiece = pieces[0];
+            chessBoard[5, 0].hiddenPiece = pieces[10];
+            chessBoard[6, 0].hiddenPiece = pieces[12];
+            chessBoard[7, 0].hiddenPiece = pieces[14];
 
-            // NOTE: Black Team Pieces, 16 to 31.
-            pieces[16].Initialize(tB, pP);
-            pieces[17].Initialize(tB, pP);
-            pieces[18].Initialize(tB, pP);
-            pieces[19].Initialize(tB, pP);
-            pieces[20].Initialize(tB, pP);
-            pieces[21].Initialize(tB, pP);
-            pieces[22].Initialize(tB, pP);
-            pieces[23].Initialize(tB, pP);
-            pieces[24].Initialize(tB, pR);
-            pieces[25].Initialize(tB, pN);
-            pieces[26].Initialize(tB, pB);
-            pieces[27].Initialize(tB, pQ);
-            pieces[28].Initialize(tB, pK);
-            pieces[29].Initialize(tB, pB);
-            pieces[30].Initialize(tB, pN);
-            pieces[31].Initialize(tB, pR);
-        }
-#endregion
+            chessBoard[0, 7].hiddenPiece = pieces[29];
+            chessBoard[1, 7].hiddenPiece = pieces[28];
+            chessBoard[2, 7].hiddenPiece = pieces[25];
+            chessBoard[3, 7].hiddenPiece = pieces[31];
+            chessBoard[4, 7].hiddenPiece = pieces[16];
+            chessBoard[5, 7].hiddenPiece = pieces[26];
+            chessBoard[6, 7].hiddenPiece = pieces[28];
+            chessBoard[7, 7].hiddenPiece = pieces[30];
 
-#region Input Signal
-        public void SignalSelect(int _posX, int _posY)
-        {
-            Debug.Assert(_posX >= 0 && _posX < c_BOARD_SIZE_X);
-            Debug.Assert(_posY >= 0 && _posY < c_BOARD_SIZE_Y);
-
-            if(inputSelectedPositionX == _posX && inputSelectedPositionY == _posY)
+            for(int y = 0; y < 8; ++y)
+            for(int x = 0; x < 8; ++x)
             {
-                inputSelectedPositionX = -1;
-                inputSelectedPositionY = -1;
+                chessBoard[x, y].shownPiece = chessBoard[x, y].hiddenPiece;
+            }
+        }
+
+        public GameState UpdateGameState()
+        {
+            int attackerTeamColorInt = currentTurnNumber % 2;
+            bool hasAnyLegalAction = false;
+
+            Color attackerTeamColor = (Color)attackerTeamColorInt;
+            Color defencerTeamColor = (Color)(1 - attackerTeamColorInt);
+
+            for (int y = 0; y < 8; ++y)
+            for (int x = 0; x < 8; ++x)
+            {
+                if (chessBoard[x, y].hiddenPiece == null || chessBoard[x, y].hiddenPiece.color != attackerTeamColor)
+                    continue;
+
+                CellData cellData = chessBoard[x, y];
+                Piece attackerPiece = cellData.hiddenPiece;
+
+                attackerPiece.nextActions.Clear();
+                m_GenerateAgentAction(cellData);
+
+                List<PieceActionList> actions = attackerPiece.nextActions;
+
+                for(int j = actions.Count - 1; j >= 0; --j)
+                {
+                    actions[j].isTestAction = true;
+                    actions[j].Next();
+                    DrawCheckableMap(attackerTeamColor);
+                    actions[j].Undo();
+
+                    if(IsChecked(attackerTeamColor))
+                    {
+                        // NOTE: attacker의 불법적인 수
+                        actions.RemoveAt(j);
+                    }
+                    else
+                    {
+                        // NOTE: attacker의 합법적인 수
+                        hasAnyLegalAction = true;
+                    }
+                }
+            }
+
+            DrawCheckableMap(attackerTeamColor);
+
+            if(hasAnyLegalAction)
+            {
+                // NOTE: attacker는 움직일 수 있습니다.
+                return GameState.Running;
+            }
+            else if(IsChecked(attackerTeamColor))
+            {
+                // NOTE: 체크메이트 상태, attackerTeam이 패배했습니다. 게임을 종료합니다.
+                return GameState.Checkmate;
             }
             else
             {
-                inputSelectedPositionX = _posX;
-                inputSelectedPositionY = _posY;
+                // NOTE: 스테일메이트 상태, 게임을 무승부 처리합니다.
+                return GameState.Stalemate;
             }
         }
 
-        public void SignalMove(int _posX, int _posY)
+        private void DrawCheckableMap(Color _attackerTeamColor)
         {
-            Debug.Assert(_posX >= 0 && _posX < c_BOARD_SIZE_X);
-            Debug.Assert(_posY >= 0 && _posY < c_BOARD_SIZE_Y);
-            Debug.Assert(inputSelectedPositionX >= 0 && inputSelectedPositionX < c_BOARD_SIZE_X);
-            Debug.Assert(inputSelectedPositionY >= 0 && inputSelectedPositionY < c_BOARD_SIZE_Y);
-            Debug.Assert(gameBoard[inputSelectedPositionX, inputSelectedPositionY] != null);
+            Queue<CellData> attackerCells = new Queue<CellData>();
 
-            inputMovingPositionX = _posX;
-            inputMovingPositionY = _posY;
-        }
-
-        public void SignalPromote(PieceType _pieceType)
-        {
-            inputPromoted = _pieceType;
-        }
-#endregion
-
-#region Draw Check Map
-        private void ClearCheckMap()
-        {
-            for(int i = 0; i < c_BOARD_SIZE_X; ++i)
-            for(int j = 0; j < c_BOARD_SIZE_Y; ++j)
+            for(int y = 0; y < 8; ++y)
+            for(int x = 0; x < 8; ++x)
             {
-                checkMap[i, j] = false;
+                Piece attackerPiece = chessBoard[x, y].hiddenPiece;
+
+                if(attackerPiece != null && attackerPiece.color == _attackerTeamColor)
+                    attackerCells.Enqueue(chessBoard[x, y]);
+
+                chessBoard[x, y].checkablePieces.Clear();
             }
-        }
 
-        private void m_DrawCheckMap(Color _color)
-        {
-            for(int i = 0; i < c_BOARD_SIZE_X; ++i)
+            while(attackerCells.Count > 0)
             {
-                for(int j = 0; j < c_BOARD_SIZE_Y; ++j)
+                CellData cellData = attackerCells.Dequeue();
+
+                switch(cellData.hiddenPiece.pieceType)
                 {
-                    if(gameBoard[i, j] != null && gameBoard[i, j].color == _color)
-                    {
-                        m_DrawCheckMap(i, j);
-                    }
+                    case PieceType.Pawn:
+                        int axis = _attackerTeamColor == Color.White ? 1 : -1;
+                        m_DrawCheckableMapAsCell(cellData, new IntVector2(axis, axis), true);
+                        m_DrawCheckableMapAsCell(cellData, new IntVector2(-axis, axis), true);
+                        break;
+                    case PieceType.Bishop:
+                        m_DrawCheckableMapAsLinear(cellData, new IntVector2(1, 1));
+                        m_DrawCheckableMapAsLinear(cellData, new IntVector2(1, -1));
+                        m_DrawCheckableMapAsLinear(cellData, new IntVector2(-1, 1));
+                        m_DrawCheckableMapAsLinear(cellData, new IntVector2(-1, -1));
+                        break;
+                    case PieceType.Knight:
+                        m_DrawCheckableMapAsCell(cellData, new IntVector2(2, 1), false);
+                        m_DrawCheckableMapAsCell(cellData, new IntVector2(1, 2), false);
+                        m_DrawCheckableMapAsCell(cellData, new IntVector2(-2, 1), false);
+                        m_DrawCheckableMapAsCell(cellData, new IntVector2(-1, 2), false);
+                        m_DrawCheckableMapAsCell(cellData, new IntVector2(2, -1), false);
+                        m_DrawCheckableMapAsCell(cellData, new IntVector2(1, -2), false);
+                        m_DrawCheckableMapAsCell(cellData, new IntVector2(-2, -1), false);
+                        m_DrawCheckableMapAsCell(cellData, new IntVector2(-1, -2), false);
+                        break;
+                    case PieceType.Rook:
+                        m_DrawCheckableMapAsLinear(cellData, new IntVector2(1, 0));
+                        m_DrawCheckableMapAsLinear(cellData, new IntVector2(0, 1));
+                        m_DrawCheckableMapAsLinear(cellData, new IntVector2(-1, 0));
+                        m_DrawCheckableMapAsLinear(cellData, new IntVector2(0, -1));
+                        break;
+                    case PieceType.Queen:
+                        m_DrawCheckableMapAsLinear(cellData, new IntVector2(1, 1));
+                        m_DrawCheckableMapAsLinear(cellData, new IntVector2(1, -1));
+                        m_DrawCheckableMapAsLinear(cellData, new IntVector2(-1, 1));
+                        m_DrawCheckableMapAsLinear(cellData, new IntVector2(-1, -1));
+                        m_DrawCheckableMapAsLinear(cellData, new IntVector2(1, 0));
+                        m_DrawCheckableMapAsLinear(cellData, new IntVector2(0, 1));
+                        m_DrawCheckableMapAsLinear(cellData, new IntVector2(-1, 0));
+                        m_DrawCheckableMapAsLinear(cellData, new IntVector2(0, -1));
+                        break;
+                    case PieceType.King:
+                        m_DrawCheckableMapAsCell(cellData, new IntVector2(0, 1), false);
+                        m_DrawCheckableMapAsCell(cellData, new IntVector2(-1, 1), false);
+                        m_DrawCheckableMapAsCell(cellData, new IntVector2(-1, 0), false);
+                        m_DrawCheckableMapAsCell(cellData, new IntVector2(-1, -1), false);
+                        m_DrawCheckableMapAsCell(cellData, new IntVector2(0, -1), false);
+                        m_DrawCheckableMapAsCell(cellData, new IntVector2(1, -1), false);
+                        m_DrawCheckableMapAsCell(cellData, new IntVector2(1, 0), false);
+                        m_DrawCheckableMapAsCell(cellData, new IntVector2(1, 1), false);
+                        break;
+                    default:
+                        break;
+                }
+            }
+/*
+            PieceActionList actionList = null;
+
+            actionList.isTestAction = true;
+            actionList.Next();
+            // if (legal movement)
+            // else (illegal movement)
+            actionList.Undo();
+*/
+        }
+
+#region Action Handling
+        private void m_GenerateAgentAction(CellData _cellData)
+        {
+            switch(_cellData.hiddenPiece.pieceType)
+            {
+                case PieceType.Pawn:
+                    m_GeneratePawnAction(_cellData);
+                    break;
+                case PieceType.Bishop:
+                    m_GenerateLinearAction(_cellData, new IntVector2(1, 1));
+                    m_GenerateLinearAction(_cellData, new IntVector2(1, -1));
+                    m_GenerateLinearAction(_cellData, new IntVector2(-1, 1));
+                    m_GenerateLinearAction(_cellData, new IntVector2(-1, -1));
+                    break;
+                case PieceType.Knight:
+                    m_GenerateCellAction(_cellData, new IntVector2(1, 1));
+                    m_GenerateCellAction(_cellData, new IntVector2(1, 1));
+                    m_GenerateCellAction(_cellData, new IntVector2(1, 1));
+                    m_GenerateCellAction(_cellData, new IntVector2(1, 1));
+                    m_GenerateCellAction(_cellData, new IntVector2(1, 1));
+                    m_GenerateCellAction(_cellData, new IntVector2(1, 1));
+                    m_GenerateCellAction(_cellData, new IntVector2(1, 1));
+                    m_GenerateCellAction(_cellData, new IntVector2(1, 1));
+                    break;
+                case PieceType.Rook:
+                    m_GenerateLinearAction(_cellData, new IntVector2(1, 0));
+                    m_GenerateLinearAction(_cellData, new IntVector2(0, 1));
+                    m_GenerateLinearAction(_cellData, new IntVector2(-1, 0));
+                    m_GenerateLinearAction(_cellData, new IntVector2(0, -1));
+                    break;
+                case PieceType.Queen:
+                    m_GenerateLinearAction(_cellData, new IntVector2(1, 1));
+                    m_GenerateLinearAction(_cellData, new IntVector2(1, -1));
+                    m_GenerateLinearAction(_cellData, new IntVector2(-1, 1));
+                    m_GenerateLinearAction(_cellData, new IntVector2(-1, -1));
+                    m_GenerateLinearAction(_cellData, new IntVector2(1, 0));
+                    m_GenerateLinearAction(_cellData, new IntVector2(0, 1));
+                    m_GenerateLinearAction(_cellData, new IntVector2(-1, 0));
+                    m_GenerateLinearAction(_cellData, new IntVector2(0, -1));
+                    break;
+                case PieceType.King:
+                    m_GenerateCellAction(_cellData, new IntVector2(1, 1));
+                    m_GenerateCellAction(_cellData, new IntVector2(1, 0));
+                    m_GenerateCellAction(_cellData, new IntVector2(1, -1));
+                    m_GenerateCellAction(_cellData, new IntVector2(0, 1));
+                    m_GenerateCellAction(_cellData, new IntVector2(0, -1));
+                    m_GenerateCellAction(_cellData, new IntVector2(-1, 1));
+                    m_GenerateCellAction(_cellData, new IntVector2(-1, 0));
+                    m_GenerateCellAction(_cellData, new IntVector2(-1, -1));
+                    m_GenerateCastlingAction(_cellData, new IntVector2(1, 0));
+                    m_GenerateCastlingAction(_cellData, new IntVector2(-1, 0));
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        private void m_GeneratePawnAction(CellData _cellData)
+        {
+            Piece piece = _cellData.hiddenPiece;
+
+            int axis = piece.color == Color.White ? 1 : -1;
+            IntVector2 position = _cellData.position;
+
+            IntVector2 frontPosition1 = new IntVector2(position.x, position.y + axis);
+            IntVector2 frontPosition2 = new IntVector2(position.x, frontPosition1.y + axis);
+            IntVector2 sideFrontPosition1 = new IntVector2(position.x - axis, frontPosition1.y);
+            IntVector2 sideFrontPosition2 = new IntVector2(position.x + axis, frontPosition1.y);
+            IntVector2 sidePosition1 = new IntVector2(sideFrontPosition1.x, position.y);
+            IntVector2 sidePosition2 = new IntVector2(sideFrontPosition2.x, position.y);
+
+            if (this.IsValidPosition(frontPosition1) &&
+                this.IsEmptyCell(frontPosition1))
+            {
+                PieceActionList front1 = new PieceActionList(frontPosition1, 1, true);
+                front1.Add(new PieceMoveAction(this, position, frontPosition1));
+                piece.nextActions.Add(front1);
+
+                if (piece.movedCount == 0 && this.IsEmptyCell(frontPosition2))
+                {
+                    PieceActionList front2 = new PieceActionList(frontPosition2, 1, true);
+                    front2.Add(new PieceMoveAction(this, position, frontPosition2));
+                    piece.nextActions.Add(front2);
+                }
+            }
+
+            if (this.IsValidPosition(sideFrontPosition1) &&
+                this.IsEnemyPiece(position, sideFrontPosition1))
+            {
+                PieceActionList sideFront1 = new PieceActionList(sideFrontPosition1, 1, true);
+                sideFront1.Add(new PieceMoveAction(this, position, sideFrontPosition1));
+                piece.nextActions.Add(sideFront1);
+            }
+
+            if (this.IsValidPosition(sideFrontPosition2) &&
+                this.IsEnemyPiece(position, sideFrontPosition2))
+            {
+                PieceActionList sideFront2 = new PieceActionList(sideFrontPosition2, 1, true);
+                sideFront2.Add(new PieceMoveAction(this, position, sideFrontPosition2));
+                piece.nextActions.Add(sideFront2);
+            }
+
+            if (this.IsValidPosition(sidePosition1) &&
+                this.IsEnemyPiece(position, sidePosition1) &&
+                piece == this.latestSpecialStartedPawn &&
+                this.ComparePieceType(position, PieceType.Pawn)
+            )
+            {
+                PieceActionList side1 = new PieceActionList(sideFrontPosition1, 2, true);
+                side1.Add(new PieceCatchAction(this, sidePosition1));
+                side1.Add(new PieceMoveAction(this, position, sideFrontPosition1));
+                piece.nextActions.Add(side1);
+            }
+
+            if (this.IsValidPosition(sidePosition2) &&
+                this.IsEnemyPiece(position, sidePosition2) &&
+                piece == this.latestSpecialStartedPawn &&
+                this.ComparePieceType(position, PieceType.Pawn)
+            )
+            {
+                PieceActionList side2 = new PieceActionList(sideFrontPosition2, 2, true);
+                side2.Add(new PieceCatchAction(this, sidePosition2));
+                side2.Add(new PieceMoveAction(this, position, sideFrontPosition2));
+                piece.nextActions.Add(side2);
+            }
+        }
+
+        private void m_GenerateLinearAction(CellData _cellData, IntVector2 _deltaPosition)
+        {
+            Debug.Assert(Math.Abs(_deltaPosition.x) <= 1 && Math.Abs(_deltaPosition.y) <= 1);
+
+            Piece piece = _cellData.hiddenPiece;
+            IntVector2 nextPosition = _cellData.position;
+
+            while (true)
+            {
+                nextPosition.x += _deltaPosition.x;
+                nextPosition.y += _deltaPosition.y;
+
+                if (!this.IsValidPosition(nextPosition) || this.IsAllyPiece(_cellData.position, nextPosition))
+                {
+                    break;
+                }
+                else if (this.IsEnemyPiece(_cellData.position, nextPosition))
+                {
+                    PieceActionList catchAction = new PieceActionList(nextPosition, 2, true);
+                    catchAction.Add(new PieceCatchAction(this, nextPosition));
+                    catchAction.Add(new PieceMoveAction(this, _cellData.position, nextPosition));
+                    piece.nextActions.Add(catchAction);
+                    break;
+                }
+                else
+                {
+                    PieceActionList moveAction = new PieceActionList(nextPosition, 1, true);
+                    moveAction.Add(new PieceMoveAction(this, _cellData.position, nextPosition));
+                    piece.nextActions.Add(moveAction);
                 }
             }
         }
 
-        private void m_DrawCheckMap(int _posX, int _posY)
+        private void m_GenerateCellAction(CellData _cellData, IntVector2 _deltaPosition)
         {
-            Debug.Assert(gameBoard[_posX, _posY] != null);
+            Piece piece = _cellData.hiddenPiece;
+            IntVector2 nextPosition = _cellData.position;
+            nextPosition.x += _deltaPosition.x;
+            nextPosition.y += _deltaPosition.y;
 
-            switch(gameBoard[_posX, _posY].pieceType)
+            if(!this.IsValidPosition(nextPosition) || this.IsAllyPiece(_cellData.position, nextPosition))
+                return;
+            else if(this.IsEnemyPiece(_cellData.position, nextPosition))
             {
-                case PieceType.Pawn:
-                    m_DrawAsPawn(_posX, _posY);
-                    break;
-                case PieceType.Bishop:
-                    m_DrawAsBishop(_posX, _posY);
-                    break;
-                case PieceType.Knight:
-                    m_DrawAsKnight(_posX, _posY);
-                    break;
-                case PieceType.Rook:
-                    m_DrawAsRook(_posX, _posY);
-                    break;
-                case PieceType.Queen:
-                    m_DrawAsQueen(_posX, _posY);
-                    break;
-                case PieceType.King:
-                    m_DrawAsKing(_posX, _posY);
-                    break;
-                default:
-                    Debug.Assert(false);
-                    break;
+                PieceActionList catchAction = new PieceActionList(nextPosition, 2, true);
+                catchAction.Add(new PieceCatchAction(this, nextPosition));
+                catchAction.Add(new PieceMoveAction(this, _cellData.position, nextPosition));
+                piece.nextActions.Add(catchAction);
+            }
+            else
+            {
+                PieceActionList moveAction = new PieceActionList(nextPosition, 1, true);
+                moveAction.Add(new PieceMoveAction(this, _cellData.position, nextPosition));
+                piece.nextActions.Add(moveAction);
             }
         }
 
-        private void m_DrawAsPawn(int _posX, int _posY)
+        private void m_GenerateCastlingAction(CellData _cellData, IntVector2 _deltaPosition)
         {
-            Debug.Assert(IsValidPosition(_posX, _posY), "좌표가 올바르지 않음");
+            Debug.Assert(Math.Abs(_deltaPosition.x) == 1 && _deltaPosition.y == 0);
 
-            Piece piece = gameBoard[_posX, _posY];
+            Piece piece = _cellData.hiddenPiece;
+            IntVector2 nextPosition = _cellData.position;
 
-            Debug.Assert(piece != null && piece.pieceType == PieceType.Pawn, string.Format("({0}, {1})에 폰이 존재하지 않음", _posX, _posY));
-
-            int axis = piece.color == Color.White ? 1 : -1;
-
-            // NOTE: catch
-            if (IsValidPosition(_posX + axis, _posY + axis) &&
-                !IsEmptyCell(_posX + axis, _posY + axis) &&
-                IsEnemyPiece(_posX, _posY, _posX + axis, _posY + axis)
-            )
-            {
-                checkMap[_posX + axis, _posY + axis] = true;
-            }
-            if (IsValidPosition(_posX - axis, _posY + axis) &&
-                !IsEmptyCell(_posX - axis, _posY + axis) &&
-                IsEnemyPiece(_posX, _posY, _posX - axis, _posY + axis)
-            )
-            {
-                checkMap[_posX - axis, _posY + axis] = true;
-            }
-
-            // NOTE: en passant
-            if (IsValidPosition(_posX + axis, _posY) &&
-                !IsEmptyCell(_posX + axis, _posY) &&
-                gameBoard[_posX + axis, _posY] == inputPawnSpecialStarted
-            )
-            {
-                checkMap[_posX + axis, _posY] = true;
-            }
-            if (IsValidPosition(_posX - axis, _posY) &&
-                !IsEmptyCell(_posX - axis, _posY) &&
-                gameBoard[_posX - axis, _posY] == inputPawnSpecialStarted
-            )
-            {
-                checkMap[_posX - axis, _posY] = true;
-            }
-        }
-
-        private void m_DrawAsBishop(int _posX, int _posY)
-        {
-            Debug.Assert(IsValidPosition(_posX, _posY), "좌표가 올바르지 않음");
-
-            Piece piece = gameBoard[_posX, _posY];
-
-            Debug.Assert(piece != null && piece.pieceType == PieceType.Bishop, string.Format("({0}, {1})에 비숍이 존재하지 않음", _posX, _posY));
-
-            m_DrawAsLinear(_posX, _posY, 1, 1);
-            m_DrawAsLinear(_posX, _posY, 1, -1);
-            m_DrawAsLinear(_posX, _posY, -1, 1);
-            m_DrawAsLinear(_posX, _posY, -1, -1);
-        }
-
-        private void m_DrawAsKnight(int _posX, int _posY)
-        {
-            Debug.Assert(IsValidPosition(_posX, _posY), "좌표가 올바르지 않음");
-
-            Piece piece = gameBoard[_posX, _posY];
-
-            Debug.Assert(piece != null && piece.pieceType == PieceType.Knight, string.Format("({0}, {1})에 나이트가 존재하지 않음", _posX, _posY));
-
-            m_DrawAsCell(_posX + 2, _posY + 1);
-            m_DrawAsCell(_posX + 1, _posY + 2);
-            m_DrawAsCell(_posX - 1, _posY + 2);
-            m_DrawAsCell(_posX - 2, _posY + 1);
-            m_DrawAsCell(_posX + 1, _posY - 2);
-            m_DrawAsCell(_posX + 2, _posY - 1);
-            m_DrawAsCell(_posX - 1, _posY - 2);
-            m_DrawAsCell(_posX - 2, _posY - 1);
-        }
-
-        private void m_DrawAsRook(int _posX, int _posY)
-        {
-            Debug.Assert(IsValidPosition(_posX, _posY), "좌표가 올바르지 않음");
-
-            Piece piece = gameBoard[_posX, _posY];
-
-            Debug.Assert(piece != null && piece.pieceType == PieceType.Rook, string.Format("({0}, {1})에 룩이 존재하지 않음", _posX, _posY));
-
-            m_DrawAsLinear(_posX, _posY, 1, 0);
-            m_DrawAsLinear(_posX, _posY, 0, 1);
-            m_DrawAsLinear(_posX, _posY, -1, 0);
-            m_DrawAsLinear(_posX, _posY, 0, -1);
-        }
-
-        private void m_DrawAsQueen(int _posX, int _posY)
-        {
-            Debug.Assert(IsValidPosition(_posX, _posY), "좌표가 올바르지 않음");
-
-            Piece piece = gameBoard[_posX, _posY];
-
-            Debug.Assert(piece != null && piece.pieceType == PieceType.Queen, string.Format("({0}, {1})에 퀸이 존재하지 않음", _posX, _posY));
-
-            m_DrawAsLinear(_posX, _posY, 1, 1);
-            m_DrawAsLinear(_posX, _posY, 1, -1);
-            m_DrawAsLinear(_posX, _posY, -1, 1);
-            m_DrawAsLinear(_posX, _posY, -1, -1);
-            m_DrawAsLinear(_posX, _posY, 1, 0);
-            m_DrawAsLinear(_posX, _posY, 0, 1);
-            m_DrawAsLinear(_posX, _posY, -1, 0);
-            m_DrawAsLinear(_posX, _posY, 0, -1);
-        }
-
-        private void m_DrawAsKing(int _posX, int _posY)
-        {
-            Debug.Assert(IsValidPosition(_posX, _posY), "좌표가 올바르지 않음");
-
-            Piece piece = gameBoard[_posX, _posY];
-
-            Debug.Assert(piece != null && piece.pieceType == PieceType.King, string.Format("({0}, {1})에 킹이 존재하지 않음", _posX, _posY));
-
-            m_DrawAsCell(_posX + 1, _posY + 1);
-            m_DrawAsCell(_posX + 1, _posY);
-            m_DrawAsCell(_posX + 1, _posY - 1);
-            m_DrawAsCell(_posX, _posY + 1);
-            m_DrawAsCell(_posX, _posY - 1);
-            m_DrawAsCell(_posX - 1, _posY + 1);
-            m_DrawAsCell(_posX - 1, _posY);
-            m_DrawAsCell(_posX - 1, _posY - 1);
-        }
-
-        private void m_DrawAsLinear(int _srcPosX, int _srcPosY, int _deltaX, int _deltaY)
-        {
-            Debug.Assert(Math.Abs(_deltaX) <= 1 && Math.Abs(_deltaY) <= 1);
-
-            int px = _srcPosX + _deltaX;
-            int py = _srcPosY + _deltaY;
-
-            while(IsValidPosition(px, py))
-            {
-                checkMap[px, py] = true;
-                px += _deltaX;
-                py += _deltaY;
-            }
-        }
-
-        private void m_DrawAsCell(int _posX, int _posY)
-        {
-            if(!IsValidPosition(_posX, _posY))
+            if(piece.movedCount > 0)
                 return;
 
-            checkMap[_posX, _posY] = true;
-        }
-#endregion
-
-#region Piece Actions
-        private void m_Move(int _srcPosX, int _srcPosY, int _dstPosX, int _dstPosY)
-        {
-            Debug.Assert(gameBoard[_srcPosX, _srcPosY] != null);
-            Debug.Assert(gameBoard[_dstPosX, _dstPosY] == null);
-
-            gameBoard[_dstPosX, _dstPosY] = gameBoard[_srcPosX, _srcPosY];
-            gameBoard[_srcPosX, _srcPosY] = null;
-        }
-
-        private void m_Catch(int _posX, int _posY)
-        {
-            Debug.Assert(gameBoard[_posX, _posY] != null);
-
-            gameBoard[_posX, _posY].isCatched = true;
-            gameBoard[_posX, _posY] = null;
-        }
-
-#endregion
-/*
-        public void Update()
-        {
-            inputIdxSelectedPiece = -1;
-            inputIdxMovement = -1;
-            inputPromotedPieceType = -1;
-
-            for(int i = 0; i < pieces.Length; ++i)
+            while(true)
             {
-                if(i == 4 || i == 28)
+                nextPosition.x += _deltaPosition.x;
+
+                if (IsEmptyCell(nextPosition))
                     continue;
-
-                pieces[i].RecognizeEnvironment(this);
+                else if(ComparePieceType(nextPosition, PieceType.Rook) && chessBoard[nextPosition.x, nextPosition.y].hiddenPiece.movedCount == 0)
+                {
+                    // TODO: Castling
+                    return;
+                }
+                else // NOTE: No Castling.
+                    return;
             }
-
-            // NOTE: K의 자충수 유무를 판단하기 위해서는 다른 기물의 움직임 계산이 선행되어야 합니다.
-            pieces[4].RecognizeEnvironment(this);
-            pieces[28].RecognizeEnvironment(this);
-
-            // TODO: Check whether gameover state or not.
-            // gameover state == checkmate, stalemate, special draw cases.
-            // special draw cases == K vs K, K+N vs K, K+B vs K, K+N vs K+N, K+N vs K+B, K+B vs K+B (6가지 경우)
-
-            // TODO: Player's input here.
-            // while(inputIdxSelectedPiece < 0 || inputIdxMovement < 0);
-
-            pieces[inputIdxSelectedPiece].Move(this, inputIdxMovement);
         }
-*/
-/*
-        private void Move(int _idxPiece, int _idxMovement)
+#endregion
+
+        private bool IsChecked(Color _defencerTeamColor)
         {
-            Movement movement = pieces[_idxPiece].AvailableMovements[_idxMovement];
-
-            int idxTemp = gameBoard[movement.nextPosition.x, movement.nextPosition.y];
-            gameBoard[movement.nextPosition.x, movement.nextPosition.y] = gameBoard[pieces[_idxPiece].position.x, pieces[_idxPiece].position.y];
-            gameBoard[pieces[_idxPiece].position.x, pieces[_idxPiece].position.y] = idxTemp;
-
-            if((movement.movementType | MovementType.Catch) != 0)
+            for(int y = 0; y < 8; ++y)
+            for(int x = 0; x < 8; ++x)
             {
-                gameBoard[pieces[_idxPiece].position.x, pieces[_idxPiece].position.y] = -1;
-            }
-            if((movement.movementType | MovementType.Promotion) != 0)
-            {
-                
-            }
-            if((movement.movementType | MovementType.EnPassant) != 0)
-            {
-                
-            }
-            if((movement.movementType | MovementType.CastlingK) != 0)
-            {
-                
-            }
-            if((movement.movementType | MovementType.CastlingQ) != 0)
-            {
-                
-            }
-
-            pieces[_idxPiece].position.x = movement.nextPosition.x;
-            pieces[_idxPiece].position.y = movement.nextPosition.y;
-        }
-*/
-#region Conditions
-
-        public bool IsValidPosition(int _posX, int _posY)
-        {
-            return !(_posX < 0 || _posX >= c_BOARD_SIZE_X || _posY < 0 || _posY >= c_BOARD_SIZE_Y);
-        }
-
-        public bool IsEnemyPiece(int _srcPosX, int _srcPosY, int _dstPosX, int _dstPosY)
-        {
-            Debug.Assert(_srcPosX != _dstPosX || _srcPosY != _dstPosY, "같은 위치는 비교할 수 없음");
-            Debug.Assert(IsValidPosition(_srcPosX, _srcPosY), "소스 좌표가 올바르지 않음");
-            Debug.Assert(IsValidPosition(_dstPosX, _dstPosY), "목적지 좌표가 올바르지 않음");
-            Debug.Assert(gameBoard[_srcPosX, _srcPosY] != null, "빈 셀에 대해 비교할 수 없음");
-            Debug.Assert(gameBoard[_dstPosX, _dstPosY] != null, "빈 셀에 대해 비교할 수 없음");
-
-            return gameBoard[_srcPosX, _srcPosY].color != gameBoard[_dstPosX, _dstPosY].color;
-        }
-
-        public bool IsAllyPiece(int _srcPosX, int _srcPosY, int _dstPosX, int _dstPosY)
-        {
-            Debug.Assert(_srcPosX != _dstPosX || _srcPosY != _dstPosY, "같은 위치는 비교할 수 없음");
-            Debug.Assert(IsValidPosition(_srcPosX, _srcPosY), "소스 좌표가 올바르지 않음");
-            Debug.Assert(IsValidPosition(_dstPosX, _dstPosY), "목적지 좌표가 올바르지 않음");
-            Debug.Assert(gameBoard[_srcPosX, _srcPosY] != null, "빈 셀에 대해 비교할 수 없음");
-            Debug.Assert(gameBoard[_dstPosX, _dstPosY] != null, "빈 셀에 대해 비교할 수 없음");
-
-            return gameBoard[_srcPosX, _srcPosY].color == gameBoard[_dstPosX, _dstPosY].color;
-        }
-
-        public bool IsEmptyCell(int _posX, int _posY)
-        {
-            Debug.Assert(IsValidPosition(_posX, _posY), "좌표가 올바르지 않음");
-
-            return gameBoard[_posX, _posY] == null;
-        }
-
-        public bool IsPawnCell(int _posX, int _posY)
-        {
-            return IsPieceType(_posX, _posY, PieceType.Pawn);
-        }
-
-        public bool IsBishopCell(int _posX, int _posY)
-        {
-            return IsPieceType(_posX, _posY, PieceType.Bishop);
-        }
-
-        public bool IsKnightCell(int _posX, int _posY)
-        {
-            return IsPieceType(_posX, _posY, PieceType.Knight);
-        }
-
-        public bool IsRookCell(int _posX, int _posY)
-        {
-            return IsPieceType(_posX, _posY, PieceType.Rook);
-        }
-
-        public bool IsQueenCell(int _posX, int _posY)
-        {
-            return IsPieceType(_posX, _posY, PieceType.Queen);
-        }
-
-        public bool IsKingCell(int _posX, int _posY)
-        {
-            return IsPieceType(_posX, _posY, PieceType.King);
-        }
-
-        public bool IsPieceType(int _posX, int _posY, PieceType _pieceType)
-        {
-            Debug.Assert(IsValidPosition(_posX, _posY), "좌표가 올바르지 않음");
-            Debug.Assert(_pieceType != PieceType.None, "정의되지 않은 기물 유형");
-            Debug.Assert(!IsEmptyCell(_posX, _posY), string.Format("({0}, {1})에 기물이 존재하지 않음", _posX, _posY));
-
-            return gameBoard[_posX, _posY].pieceType == _pieceType;
-        }
-
-        public bool IsChecked(Color _attacker, Color _defencer)
-        {
-            ClearCheckMap();
-            this.m_DrawCheckMap(_attacker);
-
-            for(int y = 0; y < c_BOARD_SIZE_Y; ++y)
-            for(int x = 0; x < c_BOARD_SIZE_X; ++x)
-            {
-                if (gameBoard[x, y] != null &&
-                    gameBoard[x, y].color == _defencer &&
-                    IsKingCell(x, y)
+                if (chessBoard[x, y].hiddenPiece != null &&
+                    chessBoard[x, y].hiddenPiece.pieceType == PieceType.King &&
+                    chessBoard[x, y].hiddenPiece.color == _defencerTeamColor
                 )
                 {
-                    return checkMap[x, y];
+                    return chessBoard[x, y].checkablePieces.Count > 0;
                 }
             }
 
             return false;
         }
+
+        private void m_DrawCheckableMapAsCell(CellData _originCellData, IntVector2 _deltaPosition, bool _onlyCatch)
+        {
+            IntVector2 dstPosition = _originCellData.position;
+            dstPosition.x += _deltaPosition.x;
+            dstPosition.y += _deltaPosition.y;
+
+            if (!IsValidPosition(dstPosition) ||
+                (IsEmptyCell(dstPosition) && !_onlyCatch) ||
+                !IsEnemyPiece(_originCellData.position, dstPosition)
+            )
+            {
+                return;
+            }
+
+            chessBoard[dstPosition.x, dstPosition.y].checkablePieces.Add(_originCellData.hiddenPiece);
+        }
+
+        private void m_DrawCheckableMapAsLinear(CellData _originCellData, IntVector2 _deltaPosition)
+        {
+            Debug.Assert(Math.Abs(_deltaPosition.x) <= 1 && Math.Abs(_deltaPosition.y) <= 1);
+
+            IntVector2 dstPosition = _originCellData.position;
+
+            while(true)
+            {
+                dstPosition.x += _deltaPosition.x;
+                dstPosition.y += _deltaPosition.y;
+
+                if (!IsValidPosition(dstPosition) ||
+                    IsAllyPiece(_originCellData.position, dstPosition)
+                )
+                {
+                    break;
+                }
+
+                chessBoard[dstPosition.x, dstPosition.y].checkablePieces.Add(_originCellData.hiddenPiece);
+            }
+        }
+
+#region Conditions
+        public bool IsValidPosition(IntVector2 _position)
+        {
+            return this.IsValidPosition(_position.x, _position.y);
+        }
+
+        public bool IsValidPosition(int _positionX, int _positionY)
+        {
+            return !(_positionX < 0 || _positionX >= 8 || _positionY < 0 || _positionY >= 8);
+        }
+
+        public bool IsEnemyPiece(IntVector2 _srcPosition, IntVector2 _dstPosition)
+        {
+            return this.IsEnemyPiece(_srcPosition.x, _srcPosition.y, _dstPosition.x, _dstPosition.y);
+        }
+
+        public bool IsEnemyPiece(int _srcPositionX, int _srcPositionY, int _dstPositionX, int _dstPositionY)
+        {
+            if(IsEmptyCell(_srcPositionX, _srcPositionY) || IsEmptyCell(_dstPositionX, _dstPositionY))
+                return false;
+
+            return chessBoard[_srcPositionX, _srcPositionY].hiddenPiece.color != chessBoard[_dstPositionX, _dstPositionY].hiddenPiece.color;
+        }
+
+        public bool IsAllyPiece(IntVector2 _srcPosition, IntVector2 _dstPosition)
+        {
+            return this.IsAllyPiece(_srcPosition.x, _srcPosition.y, _dstPosition.x, _dstPosition.y);
+        }
+
+        public bool IsAllyPiece(int _srcPositionX, int _srcPositionY, int _dstPositionX, int _dstPositionY)
+        {
+            if(IsEmptyCell(_srcPositionX, _srcPositionY) || IsEmptyCell(_dstPositionX, _dstPositionY))
+                return false;
+
+            return chessBoard[_srcPositionX, _srcPositionY].hiddenPiece.color == chessBoard[_dstPositionX, _dstPositionY].hiddenPiece.color;
+        }
+
+        public bool IsEmptyCell(IntVector2 _position)
+        {
+            return this.IsEmptyCell(_position.x, _position.y);
+        }
+
+        public bool IsEmptyCell(int _positionX, int _positionY)
+        {
+            return chessBoard[_positionX, _positionY].hiddenPiece == null;
+        }
+
+        public bool ComparePieceType(IntVector2 _position, PieceType _pieceType)
+        {
+            return this.ComparePieceType(_position.x, _position.y, _pieceType);
+        }
+
+        public bool ComparePieceType(int _positionX, int _positionY, PieceType _pieceType)
+        {
+            return chessBoard[_positionX, _positionY].hiddenPiece.pieceType == _pieceType;
+        }
 #endregion
-/*
-        public void Catch(Cell _targetPosition)
+
+        public void Draw()
         {
-            Debug.Assert(gameBoard[_targetPosition.x, _targetPosition.y] >= 0);
+            string charset = "PBNRQK";
 
-            int idxTagetPiece = gameBoard[_targetPosition.x, _targetPosition.y];
+            for (int y = 7; y >= 0; --y)
+            {
+                for (int x = 0; x < 8; ++x)
+                {
+                    if (IsEmptyCell(x, y))
+                        Console.Write("-");
+                    else if(chessBoard[x, y].shownPiece.color != Color.White)
+                        Console.Write("{0}", (char)((int)charset[(int)chessBoard[x, y].shownPiece.pieceType] + 0x20));
+                    else
+                        Console.Write("{0}", charset[(int)chessBoard[x, y].shownPiece.pieceType]);
+                }
 
-            gameBoard[_targetPosition.x, _targetPosition.y] = -1;
-            pieces[idxTagetPiece].isCatched = true;
+                Console.WriteLine();
+            }
         }
 
-        public void Swap(Cell _position0, Cell _position1)
+        public void Move(int _positionX, int _positionY, int _idxNextAction)
         {
-            int tmp = gameBoard[_position0.x, _position0.y];
-            gameBoard[_position0.x, _position0.y] = gameBoard[_position1.x, _position1.y];
-            gameBoard[_position1.x, _position1.y] = tmp;
+            CellData cellData = chessBoard[_positionX, _positionY];
+
+            PieceActionList actions = cellData.shownPiece.nextActions[_idxNextAction];
+
+            ++cellData.shownPiece.movedCount;
+            actions.isTestAction = false;
+            actions.Next();
+
+            actionHistory.Add(actions);
+
+            ++currentTurnNumber;
         }
-
-        public void Promote(int _idxPiece, PieceType _pieceType)
-        {
-            Debug.Assert(_pieceType != PieceType.Pawn);
-            Debug.Assert(_pieceType != PieceType.King);
-
-            pieces[_idxPiece].pieceType = _pieceType;
-        }
-
-        public void CastlingK(int _idxKingPiece, int _idxRookPiece)
-        {
-            Cell pKing = pieces[_idxKingPiece].position;
-            Cell pRook = pieces[_idxRookPiece].position;
-
-            Swap(pKing, new Cell(pKing.x + 2, pKing.y));
-            Swap(pRook, new Cell(pKing.x + 1, pKing.y));
-        }
-
-        public void CastlingQ(int _idxKingPiece, int _idxRookPiece)
-        {
-            Cell pKing = pieces[_idxKingPiece].position;
-            Cell pRook = pieces[_idxRookPiece].position;
-
-            Swap(pKing, new Cell(pKing.x + 2, pKing.y));
-            Swap(pRook, new Cell(pKing.x + 1, pKing.y));
-        }
-
-        public void EnPassant(int _idxAllyPawnPiece, int _idxEnemyPawnPiece)
-        {
-            int axis = pieces[_idxAllyPawnPiece].team == Color.White ? 1 : -1;
-
-            Cell pAlly = pieces[_idxAllyPawnPiece].position;
-            Cell pEnemy = pieces[_idxEnemyPawnPiece].position;
-
-            Catch(pEnemy);
-            Swap(pAlly, new Cell(pEnemy.x, pAlly.y + axis));
-        }
-*/
     }
 }
