@@ -26,10 +26,10 @@ namespace nl.ChessOnline3
                 int px = int.Parse(position[0]);
                 int py = int.Parse(position[1]);
                 CellData cellData = manager.chessBoard[px, py];
-                List<PieceActionList> nextActions = cellData.shownPiece.nextActions;
+                List<PieceAction> nextActions = cellData.piece.nextActions;
                 for(int i = 0; i < nextActions.Count; ++i)
                 {
-                    Console.WriteLine(nextActions[i].ToString());
+                    Console.WriteLine("  - {0:d2} == {1}", i, nextActions[i].ToString());
                 }
                 Console.WriteLine("이동할 인덱스 입력 i=[0, _]:");
                 int index = int.Parse(Console.ReadLine());

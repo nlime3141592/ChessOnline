@@ -11,9 +11,10 @@ namespace nl.ChessOnline3
 
         public Piece[] pieces;
 
-        public List<PieceActionList> actionHistory;
+        public List<PieceAction> actionHistory;
 
-        public Piece latestSpecialStartedPawn;
+        public Stack<Piece> catchedPieces;
+        public Piece latestSpecialStartedPawnOrNull;
 
         public ChessManager()
         {
@@ -31,7 +32,8 @@ namespace nl.ChessOnline3
             for(int i = 0; i < 32; ++i)
                 pieces[i] = new Piece();
 
-            actionHistory = new List<PieceActionList>(256);
+            actionHistory = new List<PieceAction>(256);
+            catchedPieces = new Stack<Piece>(32);
         }
 
         public void Initialize()
@@ -65,7 +67,7 @@ namespace nl.ChessOnline3
             for(int y = 0; y < 8; ++y)
             for(int x = 0; x < 8; ++x)
             {
-                chessBoard[x, y].hiddenPiece = null;
+                chessBoard[x, y].piece = null;
 
                 chessBoard[x, y].position.x = x;
                 chessBoard[x, y].position.y = y;
@@ -75,33 +77,35 @@ namespace nl.ChessOnline3
 
             for(int i = 0; i < 8; ++i)
             {
-                chessBoard[i, 1].hiddenPiece = pieces[i + 1];
-                chessBoard[i, 6].hiddenPiece = pieces[i + 17];
+                chessBoard[i, 1].piece = pieces[i + 1];
+                chessBoard[i, 6].piece = pieces[i + 17];
             }
 
-            chessBoard[0, 0].hiddenPiece = pieces[13];
-            chessBoard[1, 0].hiddenPiece = pieces[12];
-            chessBoard[2, 0].hiddenPiece = pieces[9];
-            chessBoard[3, 0].hiddenPiece = pieces[15];
-            chessBoard[4, 0].hiddenPiece = pieces[0];
-            chessBoard[5, 0].hiddenPiece = pieces[10];
-            chessBoard[6, 0].hiddenPiece = pieces[12];
-            chessBoard[7, 0].hiddenPiece = pieces[14];
+            chessBoard[0, 0].piece = pieces[13];
+            chessBoard[1, 0].piece = pieces[12];
+            chessBoard[2, 0].piece = pieces[9];
+            chessBoard[3, 0].piece = pieces[15];
+            chessBoard[4, 0].piece = pieces[0];
+            chessBoard[5, 0].piece = pieces[10];
+            chessBoard[6, 0].piece = pieces[12];
+            chessBoard[7, 0].piece = pieces[14];
 
-            chessBoard[0, 7].hiddenPiece = pieces[29];
-            chessBoard[1, 7].hiddenPiece = pieces[28];
-            chessBoard[2, 7].hiddenPiece = pieces[25];
-            chessBoard[3, 7].hiddenPiece = pieces[31];
-            chessBoard[4, 7].hiddenPiece = pieces[16];
-            chessBoard[5, 7].hiddenPiece = pieces[26];
-            chessBoard[6, 7].hiddenPiece = pieces[28];
-            chessBoard[7, 7].hiddenPiece = pieces[30];
+            chessBoard[0, 7].piece = pieces[29];
+            chessBoard[1, 7].piece = pieces[28];
+            chessBoard[2, 7].piece = pieces[25];
+            chessBoard[3, 7].piece = pieces[31];
+            chessBoard[4, 7].piece = pieces[16];
+            chessBoard[5, 7].piece = pieces[26];
+            chessBoard[6, 7].piece = pieces[28];
+            chessBoard[7, 7].piece = pieces[30];
+        }
 
-            for(int y = 0; y < 8; ++y)
-            for(int x = 0; x < 8; ++x)
-            {
-                chessBoard[x, y].shownPiece = chessBoard[x, y].hiddenPiece;
-            }
+        private PieceAction PeekHistory()
+        {
+            if (actionHistory.Count == 0)
+                return null;
+
+            return actionHistory[actionHistory.Count - 1];
         }
 
         public GameState UpdateGameState()
@@ -112,26 +116,27 @@ namespace nl.ChessOnline3
             Color attackerTeamColor = (Color)attackerTeamColorInt;
             Color defencerTeamColor = (Color)(1 - attackerTeamColorInt);
 
+            PieceAction latestActionOrNull = PeekHistory();
+
             for (int y = 0; y < 8; ++y)
             for (int x = 0; x < 8; ++x)
             {
-                if (chessBoard[x, y].hiddenPiece == null || chessBoard[x, y].hiddenPiece.color != attackerTeamColor)
+                if (chessBoard[x, y].piece == null || chessBoard[x, y].piece.color != attackerTeamColor)
                     continue;
 
                 CellData cellData = chessBoard[x, y];
-                Piece attackerPiece = cellData.hiddenPiece;
+                Piece attackerPiece = cellData.piece;
 
                 attackerPiece.nextActions.Clear();
                 m_GenerateAgentAction(cellData);
 
-                List<PieceActionList> actions = attackerPiece.nextActions;
+                List<PieceAction> actions = attackerPiece.nextActions;
 
                 for(int j = actions.Count - 1; j >= 0; --j)
                 {
-                    actions[j].isTestAction = true;
-                    actions[j].Next();
+                    m_DoPieceAction(latestActionOrNull, actions[j]);
                     DrawCheckableMap(attackerTeamColor);
-                    actions[j].Undo();
+                    m_UndoPieceAction(latestActionOrNull, actions[j]);
 
                     if(IsChecked(attackerTeamColor))
                     {
@@ -165,6 +170,7 @@ namespace nl.ChessOnline3
             }
         }
 
+#region Piece Action Generating
         private void DrawCheckableMap(Color _attackerTeamColor)
         {
             Queue<CellData> attackerCells = new Queue<CellData>();
@@ -172,7 +178,7 @@ namespace nl.ChessOnline3
             for(int y = 0; y < 8; ++y)
             for(int x = 0; x < 8; ++x)
             {
-                Piece attackerPiece = chessBoard[x, y].hiddenPiece;
+                Piece attackerPiece = chessBoard[x, y].piece;
 
                 if(attackerPiece != null && attackerPiece.color == _attackerTeamColor)
                     attackerCells.Enqueue(chessBoard[x, y]);
@@ -184,7 +190,7 @@ namespace nl.ChessOnline3
             {
                 CellData cellData = attackerCells.Dequeue();
 
-                switch(cellData.hiddenPiece.pieceType)
+                switch(cellData.piece.pieceType)
                 {
                     case PieceType.Pawn:
                         int axis = _attackerTeamColor == Color.White ? 1 : -1;
@@ -248,10 +254,48 @@ namespace nl.ChessOnline3
 */
         }
 
-#region Action Handling
+        private void m_DrawCheckableMapAsCell(CellData _originCellData, IntVector2 _deltaPosition, bool _onlyCatch)
+        {
+            IntVector2 dstPosition = _originCellData.position;
+            dstPosition.x += _deltaPosition.x;
+            dstPosition.y += _deltaPosition.y;
+
+            if (!IsValidPosition(dstPosition) ||
+                (IsEmptyCell(dstPosition) && !_onlyCatch) ||
+                !IsEnemyPiece(_originCellData.position, dstPosition)
+            )
+            {
+                return;
+            }
+
+            chessBoard[dstPosition.x, dstPosition.y].checkablePieces.Add(_originCellData.piece);
+        }
+
+        private void m_DrawCheckableMapAsLinear(CellData _originCellData, IntVector2 _deltaPosition)
+        {
+            Debug.Assert(Math.Abs(_deltaPosition.x) <= 1 && Math.Abs(_deltaPosition.y) <= 1);
+
+            IntVector2 dstPosition = _originCellData.position;
+
+            while(true)
+            {
+                dstPosition.x += _deltaPosition.x;
+                dstPosition.y += _deltaPosition.y;
+
+                if (!IsValidPosition(dstPosition) ||
+                    IsAllyPiece(_originCellData.position, dstPosition)
+                )
+                {
+                    break;
+                }
+
+                chessBoard[dstPosition.x, dstPosition.y].checkablePieces.Add(_originCellData.piece);
+            }
+        }
+
         private void m_GenerateAgentAction(CellData _cellData)
         {
-            switch(_cellData.hiddenPiece.pieceType)
+            switch(_cellData.piece.pieceType)
             {
                 case PieceType.Pawn:
                     m_GeneratePawnAction(_cellData);
@@ -263,14 +307,14 @@ namespace nl.ChessOnline3
                     m_GenerateLinearAction(_cellData, new IntVector2(-1, -1));
                     break;
                 case PieceType.Knight:
-                    m_GenerateCellAction(_cellData, new IntVector2(1, 1));
-                    m_GenerateCellAction(_cellData, new IntVector2(1, 1));
-                    m_GenerateCellAction(_cellData, new IntVector2(1, 1));
-                    m_GenerateCellAction(_cellData, new IntVector2(1, 1));
-                    m_GenerateCellAction(_cellData, new IntVector2(1, 1));
-                    m_GenerateCellAction(_cellData, new IntVector2(1, 1));
-                    m_GenerateCellAction(_cellData, new IntVector2(1, 1));
-                    m_GenerateCellAction(_cellData, new IntVector2(1, 1));
+                    m_GenerateCellAction(_cellData, new IntVector2(2, 1));
+                    m_GenerateCellAction(_cellData, new IntVector2(1, 2));
+                    m_GenerateCellAction(_cellData, new IntVector2(-2, 1));
+                    m_GenerateCellAction(_cellData, new IntVector2(-1, 2));
+                    m_GenerateCellAction(_cellData, new IntVector2(2, -1));
+                    m_GenerateCellAction(_cellData, new IntVector2(1, -2));
+                    m_GenerateCellAction(_cellData, new IntVector2(-2, -1));
+                    m_GenerateCellAction(_cellData, new IntVector2(-1, -2));
                     break;
                 case PieceType.Rook:
                     m_GenerateLinearAction(_cellData, new IntVector2(1, 0));
@@ -307,71 +351,52 @@ namespace nl.ChessOnline3
 
         private void m_GeneratePawnAction(CellData _cellData)
         {
-            Piece piece = _cellData.hiddenPiece;
-
+            Piece piece = _cellData.piece;
+            List<PieceAction> nextActions = piece.nextActions;
+            int sx = _cellData.position.x;
+            int sy = _cellData.position.y;
             int axis = piece.color == Color.White ? 1 : -1;
-            IntVector2 position = _cellData.position;
 
-            IntVector2 frontPosition1 = new IntVector2(position.x, position.y + axis);
-            IntVector2 frontPosition2 = new IntVector2(position.x, frontPosition1.y + axis);
-            IntVector2 sideFrontPosition1 = new IntVector2(position.x - axis, frontPosition1.y);
-            IntVector2 sideFrontPosition2 = new IntVector2(position.x + axis, frontPosition1.y);
-            IntVector2 sidePosition1 = new IntVector2(sideFrontPosition1.x, position.y);
-            IntVector2 sidePosition2 = new IntVector2(sideFrontPosition2.x, position.y);
+            IntVector2 vOrigin = _cellData.position;
+            IntVector2 vFront1 = new IntVector2(sx, sy + axis);
+            IntVector2 vFront2 = new IntVector2(sx, sy + 2 * axis);
+            IntVector2 vDiag1 = new IntVector2(sx + axis, vFront1.y);
+            IntVector2 vDiag2 = new IntVector2(sx - axis, vFront1.y);
+            IntVector2 vSide1 = new IntVector2(vDiag1.x, sy);
+            IntVector2 vSide2 = new IntVector2(vDiag2.x, sy);
 
-            if (this.IsValidPosition(frontPosition1) &&
-                this.IsEmptyCell(frontPosition1))
+            if (this.IsValidPosition(vFront1) && this.IsEmptyCell(vFront1))
             {
-                PieceActionList front1 = new PieceActionList(frontPosition1, 1, true);
-                front1.Add(new PieceMoveAction(this, position, frontPosition1));
-                piece.nextActions.Add(front1);
+                nextActions.Add(PieceAction.GetMoveAction(sx, sy, vFront1.x, vFront1.y));
 
-                if (piece.movedCount == 0 && this.IsEmptyCell(frontPosition2))
+                if (piece.movedCount == 0 && this.IsEmptyCell(vFront2))
                 {
-                    PieceActionList front2 = new PieceActionList(frontPosition2, 1, true);
-                    front2.Add(new PieceMoveAction(this, position, frontPosition2));
-                    piece.nextActions.Add(front2);
+                    PieceAction actFront2 = PieceAction.GetMoveAction(sx, sy, vFront2.x, vFront2.y);
+                    actFront2.isSpecialStartedPawn = true;
+                    nextActions.Add(actFront2);
                 }
             }
 
-            if (this.IsValidPosition(sideFrontPosition1) &&
-                this.IsEnemyPiece(position, sideFrontPosition1))
-            {
-                PieceActionList sideFront1 = new PieceActionList(sideFrontPosition1, 1, true);
-                sideFront1.Add(new PieceMoveAction(this, position, sideFrontPosition1));
-                piece.nextActions.Add(sideFront1);
-            }
+            if (this.IsValidPosition(vDiag1) && this.IsEnemyPiece(vOrigin, vDiag1))
+                nextActions.Add(PieceAction.GetCatchAction(sx, sy, vDiag1.x, vDiag1.y));
 
-            if (this.IsValidPosition(sideFrontPosition2) &&
-                this.IsEnemyPiece(position, sideFrontPosition2))
-            {
-                PieceActionList sideFront2 = new PieceActionList(sideFrontPosition2, 1, true);
-                sideFront2.Add(new PieceMoveAction(this, position, sideFrontPosition2));
-                piece.nextActions.Add(sideFront2);
-            }
+            if (this.IsValidPosition(vDiag2) && this.IsEnemyPiece(vOrigin, vDiag2))
+                nextActions.Add(PieceAction.GetCatchAction(sx, sy, vDiag2.x, vDiag2.y));
 
-            if (this.IsValidPosition(sidePosition1) &&
-                this.IsEnemyPiece(position, sidePosition1) &&
-                piece == this.latestSpecialStartedPawn &&
-                this.ComparePieceType(position, PieceType.Pawn)
+            if (this.IsValidPosition(vSide1) &&
+                !this.IsEmptyCell(vSide1) &&
+                chessBoard[vSide1.x, vSide1.y].piece == latestSpecialStartedPawnOrNull
             )
             {
-                PieceActionList side1 = new PieceActionList(sideFrontPosition1, 2, true);
-                side1.Add(new PieceCatchAction(this, sidePosition1));
-                side1.Add(new PieceMoveAction(this, position, sideFrontPosition1));
-                piece.nextActions.Add(side1);
+                nextActions.Add(PieceAction.GetEnPassantAction(sx, sy, vSide1.x, vSide1.y, axis));
             }
 
-            if (this.IsValidPosition(sidePosition2) &&
-                this.IsEnemyPiece(position, sidePosition2) &&
-                piece == this.latestSpecialStartedPawn &&
-                this.ComparePieceType(position, PieceType.Pawn)
+            if (this.IsValidPosition(vSide2) &&
+                !this.IsEmptyCell(vSide2) &&
+                chessBoard[vSide2.x, vSide2.y].piece == latestSpecialStartedPawnOrNull
             )
             {
-                PieceActionList side2 = new PieceActionList(sideFrontPosition2, 2, true);
-                side2.Add(new PieceCatchAction(this, sidePosition2));
-                side2.Add(new PieceMoveAction(this, position, sideFrontPosition2));
-                piece.nextActions.Add(side2);
+                nextActions.Add(PieceAction.GetEnPassantAction(sx, sy, vSide2.x, vSide2.y, axis));
             }
         }
 
@@ -379,61 +404,45 @@ namespace nl.ChessOnline3
         {
             Debug.Assert(Math.Abs(_deltaPosition.x) <= 1 && Math.Abs(_deltaPosition.y) <= 1);
 
-            Piece piece = _cellData.hiddenPiece;
-            IntVector2 nextPosition = _cellData.position;
+            IntVector2 vNext = _cellData.position;
 
-            while (true)
+            do
             {
-                nextPosition.x += _deltaPosition.x;
-                nextPosition.y += _deltaPosition.y;
-
-                if (!this.IsValidPosition(nextPosition) || this.IsAllyPiece(_cellData.position, nextPosition))
-                {
-                    break;
-                }
-                else if (this.IsEnemyPiece(_cellData.position, nextPosition))
-                {
-                    PieceActionList catchAction = new PieceActionList(nextPosition, 2, true);
-                    catchAction.Add(new PieceCatchAction(this, nextPosition));
-                    catchAction.Add(new PieceMoveAction(this, _cellData.position, nextPosition));
-                    piece.nextActions.Add(catchAction);
-                    break;
-                }
-                else
-                {
-                    PieceActionList moveAction = new PieceActionList(nextPosition, 1, true);
-                    moveAction.Add(new PieceMoveAction(this, _cellData.position, nextPosition));
-                    piece.nextActions.Add(moveAction);
-                }
+                vNext.x += _deltaPosition.x;
+                vNext.y += _deltaPosition.y;
             }
+            while (m_GenerateCellAction(_cellData, vNext) == 0);
         }
 
-        private void m_GenerateCellAction(CellData _cellData, IntVector2 _deltaPosition)
+        private int m_GenerateCellAction(CellData _cellData, IntVector2 _deltaPosition)
         {
-            Piece piece = _cellData.hiddenPiece;
-            IntVector2 nextPosition = _cellData.position;
-            nextPosition.x += _deltaPosition.x;
-            nextPosition.y += _deltaPosition.y;
+            Piece piece = _cellData.piece;
+            List<PieceAction> nextActions = piece.nextActions;
+            IntVector2 vOrigin = _cellData.position;
+            IntVector2 vNext = new IntVector2(vOrigin.x + _deltaPosition.x, vOrigin.y + _deltaPosition.y);
 
-            if(!this.IsValidPosition(nextPosition) || this.IsAllyPiece(_cellData.position, nextPosition))
-                return;
-            else if(this.IsEnemyPiece(_cellData.position, nextPosition))
+            if(!this.IsValidPosition(vNext) || this.IsAllyPiece(vOrigin, vNext))
             {
-                PieceActionList catchAction = new PieceActionList(nextPosition, 2, true);
-                catchAction.Add(new PieceCatchAction(this, nextPosition));
-                catchAction.Add(new PieceMoveAction(this, _cellData.position, nextPosition));
-                piece.nextActions.Add(catchAction);
+                return -1;
+            }
+            else if(this.IsEnemyPiece(_cellData.position, vNext))
+            {
+                nextActions.Add(PieceAction.GetCatchAction(vOrigin.x, vOrigin.y, vNext.x, vNext.y));
+                return 1;
             }
             else
             {
-                PieceActionList moveAction = new PieceActionList(nextPosition, 1, true);
-                moveAction.Add(new PieceMoveAction(this, _cellData.position, nextPosition));
-                piece.nextActions.Add(moveAction);
+                nextActions.Add(PieceAction.GetMoveAction(vOrigin.x, vOrigin.y, vNext.x, vNext.y));
+                return 0;
             }
         }
 
+        // TODO: Implement whenever.
         private void m_GenerateCastlingAction(CellData _cellData, IntVector2 _deltaPosition)
         {
+            // throw new NotImplementedException();
+
+            /*
             Debug.Assert(Math.Abs(_deltaPosition.x) == 1 && _deltaPosition.y == 0);
 
             Piece piece = _cellData.hiddenPiece;
@@ -456,6 +465,217 @@ namespace nl.ChessOnline3
                 else // NOTE: No Castling.
                     return;
             }
+            */
+        }
+#endregion
+
+#region Piece Action Handling
+        private void m_DoPieceAction(PieceAction _prevAction, PieceAction _currentAction)
+        {
+            switch (_currentAction.pieceActionType)
+            {
+                case PieceActionType.Move:
+                    m_DoPieceMove(_currentAction);
+                    break;
+                case PieceActionType.Catch:
+                    m_DoPieceCatch(_currentAction);
+                    break;
+                case PieceActionType.Castling:
+                    m_DoPieceCastling(_currentAction);
+                    break;
+                case PieceActionType.EnPassant:
+                    m_DoPieceEnPassant(_currentAction);
+                    break;
+                default:
+                    break;
+            }
+
+            m_SetPawnSpecialStarts(_currentAction);
+        }
+
+        private void m_UndoPieceAction(PieceAction _lastActionOrNull, PieceAction _undidAction)
+        {
+            switch (_undidAction.pieceActionType)
+            {
+                case PieceActionType.Move:
+                    m_UndoPieceMove(_undidAction);
+                    break;
+                case PieceActionType.Catch:
+                    m_UndoPieceCatch(_undidAction);
+                    break;
+                case PieceActionType.Castling:
+                    m_UndoPieceCastling(_undidAction);
+                    break;
+                case PieceActionType.EnPassant:
+                    m_UndoPieceEnPassant(_undidAction);
+                    break;
+                default:
+                    break;
+            }
+
+            if(_lastActionOrNull != null)
+                m_SetPawnSpecialStarts(_lastActionOrNull);
+        }
+
+        private void m_SetPawnSpecialStarts(PieceAction _pieceAction)
+        {
+            if(!_pieceAction.isSpecialStartedPawn)
+            {
+                latestSpecialStartedPawnOrNull = null;
+                return;
+            }
+
+            int dx = _pieceAction.posDestination.x;
+            int dy = _pieceAction.posDestination.y;
+
+            latestSpecialStartedPawnOrNull = chessBoard[dx, dy].piece;
+        }
+
+        private void m_DoPieceMove(PieceAction _pieceAction)
+        {
+            int sx = _pieceAction.posSource.x;
+            int sy = _pieceAction.posSource.y;
+            int dx = _pieceAction.posDestination.x;
+            int dy = _pieceAction.posDestination.y;
+
+            Debug.Assert(chessBoard[sx, sy].piece != null);
+            Debug.Assert(chessBoard[dx, dy].piece == null);
+
+            chessBoard[dx, dy].piece = chessBoard[sx, sy].piece;
+            chessBoard[sx, sy].piece = null;
+
+            ++chessBoard[dx, dy].piece.movedCount;
+        }
+
+        private void m_UndoPieceMove(PieceAction _pieceAction)
+        {
+            int sx = _pieceAction.posSource.x;
+            int sy = _pieceAction.posSource.y;
+            int dx = _pieceAction.posDestination.x;
+            int dy = _pieceAction.posDestination.y;
+
+            --chessBoard[dx, dy].piece.movedCount;
+
+            chessBoard[sx, sy].piece = chessBoard[dx, dy].piece;
+            chessBoard[dx, dy].piece = null;
+        }
+
+        private void m_DoPieceCatch(PieceAction _pieceAction)
+        {
+            int sx = _pieceAction.posSource.x;
+            int sy = _pieceAction.posSource.y;
+            int dx = _pieceAction.posDestination.x;
+            int dy = _pieceAction.posDestination.y;
+
+            Debug.Assert(chessBoard[sx, sy].piece != null);
+            Debug.Assert(chessBoard[dx, dy].piece != null);
+            Debug.Assert(chessBoard[sx, sy].piece != chessBoard[dx, dy].piece);
+
+            catchedPieces.Push(chessBoard[dx, dy].piece);
+            chessBoard[dx, dy].piece.isCatched = true;
+            chessBoard[dx, dy].piece = chessBoard[sx, sy].piece;
+            chessBoard[sx, sy].piece = null;
+
+            ++chessBoard[dx, dy].piece.movedCount;
+        }
+
+        private void m_UndoPieceCatch(PieceAction _pieceAction)
+        {
+            int sx = _pieceAction.posSource.x;
+            int sy = _pieceAction.posSource.y;
+            int dx = _pieceAction.posDestination.x;
+            int dy = _pieceAction.posDestination.y;
+
+            --chessBoard[dx, dy].piece.movedCount;
+
+            chessBoard[sx, sy].piece = chessBoard[dx, dy].piece;
+            chessBoard[dx, dy].piece = catchedPieces.Pop();
+            chessBoard[dx, dy].piece.isCatched = false;
+        }
+
+        private void m_DoPieceCastling(PieceAction _pieceAction)
+        {
+            int rx = _pieceAction.posRepresentative.x;
+            int ry = _pieceAction.posRepresentative.y;
+            int sx = _pieceAction.posSource.x;
+            int sy = _pieceAction.posSource.y;
+            int dx = _pieceAction.posDestination.x;
+            int dy = _pieceAction.posDestination.y;
+            int dirKingToRook = dx - sx < 0 ? -1 : 1;
+
+            // NOTE: Source Constraints
+            Debug.Assert(chessBoard[sx, sy].piece != null);
+            Debug.Assert(chessBoard[sx, sy].piece.pieceType == PieceType.King);
+            Debug.Assert(chessBoard[sx, sy].piece.movedCount == 0);
+
+            // NOTE: Destination Constraints
+            Debug.Assert(chessBoard[dx, dy].piece != null);
+            Debug.Assert(chessBoard[dx, dy].piece.pieceType == PieceType.Rook);
+            Debug.Assert(chessBoard[dx, dy].piece.movedCount == 0);
+
+            chessBoard[rx, ry].piece = chessBoard[sx, sy].piece;
+            ++chessBoard[sx, sy].piece.movedCount;
+            chessBoard[sx, sy].piece = null;
+            chessBoard[rx - dirKingToRook, ry].piece = chessBoard[dx, dy].piece;
+            ++chessBoard[dx, dy].piece.movedCount;
+            chessBoard[dx, dy].piece = null;
+        }
+
+        private void m_UndoPieceCastling(PieceAction _pieceAction)
+        {
+            int rx = _pieceAction.posRepresentative.x;
+            int ry = _pieceAction.posRepresentative.y;
+            int sx = _pieceAction.posSource.x;
+            int sy = _pieceAction.posSource.y;
+            int dx = _pieceAction.posDestination.x;
+            int dy = _pieceAction.posDestination.y;
+            int dirKingToRook = dx - sx < 0 ? -1 : 1;
+
+            --chessBoard[rx, ry].piece.movedCount;
+            chessBoard[sx, sy].piece = chessBoard[rx, ry].piece;
+            chessBoard[rx, ry].piece = null;
+            --chessBoard[rx - dirKingToRook, ry].piece.movedCount;
+            chessBoard[dx, dy].piece = chessBoard[rx - dirKingToRook, ry].piece;
+            chessBoard[rx - dirKingToRook, ry].piece = null;
+        }
+
+        private void m_DoPieceEnPassant(PieceAction _pieceAction)
+        {
+            int rx = _pieceAction.posRepresentative.x;
+            int ry = _pieceAction.posRepresentative.y;
+            int sx = _pieceAction.posSource.x;
+            int sy = _pieceAction.posSource.y;
+            int dx = _pieceAction.posDestination.x;
+            int dy = _pieceAction.posDestination.y;
+
+            Debug.Assert(chessBoard[rx, ry].piece == null);
+            Debug.Assert(chessBoard[sx, sy].piece != null);
+            Debug.Assert(chessBoard[dx, dy].piece != null);
+
+            catchedPieces.Push(chessBoard[dx, dy].piece);
+            chessBoard[dx, dy].piece.isCatched = true;
+            chessBoard[dx, dy].piece = null;
+            chessBoard[rx, ry].piece = chessBoard[sx, sy].piece;
+            chessBoard[sx, sy].piece = null;
+
+            ++chessBoard[rx, ry].piece.movedCount;
+        }
+
+        private void m_UndoPieceEnPassant(PieceAction _pieceAction)
+        {
+            int rx = _pieceAction.posRepresentative.x;
+            int ry = _pieceAction.posRepresentative.y;
+            int sx = _pieceAction.posSource.x;
+            int sy = _pieceAction.posSource.y;
+            int dx = _pieceAction.posDestination.x;
+            int dy = _pieceAction.posDestination.y;
+
+            --chessBoard[rx, ry].piece.movedCount;
+
+            chessBoard[sx, sy].piece = chessBoard[rx, ry].piece;
+            chessBoard[rx, ry].piece = null;
+            chessBoard[dx, dy].piece = catchedPieces.Pop();
+            chessBoard[dx, dy].piece.isCatched = false;
         }
 #endregion
 
@@ -464,9 +684,9 @@ namespace nl.ChessOnline3
             for(int y = 0; y < 8; ++y)
             for(int x = 0; x < 8; ++x)
             {
-                if (chessBoard[x, y].hiddenPiece != null &&
-                    chessBoard[x, y].hiddenPiece.pieceType == PieceType.King &&
-                    chessBoard[x, y].hiddenPiece.color == _defencerTeamColor
+                if (chessBoard[x, y].piece != null &&
+                    chessBoard[x, y].piece.pieceType == PieceType.King &&
+                    chessBoard[x, y].piece.color == _defencerTeamColor
                 )
                 {
                     return chessBoard[x, y].checkablePieces.Count > 0;
@@ -474,45 +694,6 @@ namespace nl.ChessOnline3
             }
 
             return false;
-        }
-
-        private void m_DrawCheckableMapAsCell(CellData _originCellData, IntVector2 _deltaPosition, bool _onlyCatch)
-        {
-            IntVector2 dstPosition = _originCellData.position;
-            dstPosition.x += _deltaPosition.x;
-            dstPosition.y += _deltaPosition.y;
-
-            if (!IsValidPosition(dstPosition) ||
-                (IsEmptyCell(dstPosition) && !_onlyCatch) ||
-                !IsEnemyPiece(_originCellData.position, dstPosition)
-            )
-            {
-                return;
-            }
-
-            chessBoard[dstPosition.x, dstPosition.y].checkablePieces.Add(_originCellData.hiddenPiece);
-        }
-
-        private void m_DrawCheckableMapAsLinear(CellData _originCellData, IntVector2 _deltaPosition)
-        {
-            Debug.Assert(Math.Abs(_deltaPosition.x) <= 1 && Math.Abs(_deltaPosition.y) <= 1);
-
-            IntVector2 dstPosition = _originCellData.position;
-
-            while(true)
-            {
-                dstPosition.x += _deltaPosition.x;
-                dstPosition.y += _deltaPosition.y;
-
-                if (!IsValidPosition(dstPosition) ||
-                    IsAllyPiece(_originCellData.position, dstPosition)
-                )
-                {
-                    break;
-                }
-
-                chessBoard[dstPosition.x, dstPosition.y].checkablePieces.Add(_originCellData.hiddenPiece);
-            }
         }
 
 #region Conditions
@@ -536,7 +717,7 @@ namespace nl.ChessOnline3
             if(IsEmptyCell(_srcPositionX, _srcPositionY) || IsEmptyCell(_dstPositionX, _dstPositionY))
                 return false;
 
-            return chessBoard[_srcPositionX, _srcPositionY].hiddenPiece.color != chessBoard[_dstPositionX, _dstPositionY].hiddenPiece.color;
+            return chessBoard[_srcPositionX, _srcPositionY].piece.color != chessBoard[_dstPositionX, _dstPositionY].piece.color;
         }
 
         public bool IsAllyPiece(IntVector2 _srcPosition, IntVector2 _dstPosition)
@@ -549,7 +730,7 @@ namespace nl.ChessOnline3
             if(IsEmptyCell(_srcPositionX, _srcPositionY) || IsEmptyCell(_dstPositionX, _dstPositionY))
                 return false;
 
-            return chessBoard[_srcPositionX, _srcPositionY].hiddenPiece.color == chessBoard[_dstPositionX, _dstPositionY].hiddenPiece.color;
+            return chessBoard[_srcPositionX, _srcPositionY].piece.color == chessBoard[_dstPositionX, _dstPositionY].piece.color;
         }
 
         public bool IsEmptyCell(IntVector2 _position)
@@ -559,7 +740,7 @@ namespace nl.ChessOnline3
 
         public bool IsEmptyCell(int _positionX, int _positionY)
         {
-            return chessBoard[_positionX, _positionY].hiddenPiece == null;
+            return chessBoard[_positionX, _positionY].piece == null;
         }
 
         public bool ComparePieceType(IntVector2 _position, PieceType _pieceType)
@@ -569,7 +750,7 @@ namespace nl.ChessOnline3
 
         public bool ComparePieceType(int _positionX, int _positionY, PieceType _pieceType)
         {
-            return chessBoard[_positionX, _positionY].hiddenPiece.pieceType == _pieceType;
+            return chessBoard[_positionX, _positionY].piece.pieceType == _pieceType;
         }
 #endregion
 
@@ -583,10 +764,10 @@ namespace nl.ChessOnline3
                 {
                     if (IsEmptyCell(x, y))
                         Console.Write("-");
-                    else if(chessBoard[x, y].shownPiece.color != Color.White)
-                        Console.Write("{0}", (char)((int)charset[(int)chessBoard[x, y].shownPiece.pieceType] + 0x20));
+                    else if(chessBoard[x, y].piece.color != Color.White)
+                        Console.Write("{0}", (char)((int)charset[(int)chessBoard[x, y].piece.pieceType] + 0x20));
                     else
-                        Console.Write("{0}", charset[(int)chessBoard[x, y].shownPiece.pieceType]);
+                        Console.Write("{0}", charset[(int)chessBoard[x, y].piece.pieceType]);
                 }
 
                 Console.WriteLine();
@@ -597,14 +778,11 @@ namespace nl.ChessOnline3
         {
             CellData cellData = chessBoard[_positionX, _positionY];
 
-            PieceActionList actions = cellData.shownPiece.nextActions[_idxNextAction];
+            PieceAction latestActionOrNull = PeekHistory();
+            PieceAction action = cellData.piece.nextActions[_idxNextAction];
 
-            ++cellData.shownPiece.movedCount;
-            actions.isTestAction = false;
-            actions.Next();
-
-            actionHistory.Add(actions);
-
+            m_DoPieceAction(latestActionOrNull, action);
+            actionHistory.Add(action);
             ++currentTurnNumber;
         }
     }

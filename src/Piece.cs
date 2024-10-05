@@ -9,11 +9,11 @@ namespace nl.ChessOnline3
         public bool isCatched;
         public int movedCount;
 
-        public List<PieceActionList> nextActions;
+        public List<PieceAction> nextActions;
 
         public Piece()
         {
-            nextActions = new List<PieceActionList>(28);
+            nextActions = new List<PieceAction>(28);
         }
     }
 }

@@ -4,8 +4,7 @@ namespace nl.ChessOnline3
 {
     public struct CellData
     {
-        public Piece shownPiece;
-        public Piece hiddenPiece;
+        public Piece piece;
 
         public IntVector2 position;
         
